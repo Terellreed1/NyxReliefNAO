@@ -1,0 +1,85 @@
+from naoqi import ALProxy
+import time
+
+class MyClass(GeneratedClass):
+    def __init__(self):
+        try:  # disable autoBind
+            GeneratedClass.__init__(self, False)
+        except TypeError:  # if NAOqi < 1.14
+            GeneratedClass.__init__(self)
+
+    def onInput_onStart(self, p):
+        robot_ip = "nao.local"
+        robot_port = 9559
+        tts = ALProxy("ALTextToSpeech", robot_ip, robot_port)
+
+        # Define question and possible answers
+        question = "But how are you feeling? happy, sad, angry, or neutral?"
+        #if you change answers, you must change answers in detect_answer() to point answers to output
+        answers = ["happy", "sad", "angry", "neutral"]
+
+        self.say_text(question, tts)
+
+        # Introduce a delay to allow the robot to finish speaking
+        time.sleep(0.1)
+
+        # Get the user's response using speech recognition
+        user_response = self.get_user_response(answers, 50,
+                                               ALProxy("ALMemory", robot_ip, robot_port))
+
+        answer_output = self.detect_answer(user_response)
+
+        if answer_output:
+            # Trigger the specified output based on the detected answer
+            if answer_output == "output_1":
+                self.output_1()
+            elif answer_output == "output_2":
+                self.output_2()
+            elif answer_output == "output_3":
+                self.output_3()
+            elif answer_output == "output_4":
+                self.output_4()
+            else:
+                self.onDefault()
+        else:
+            self.onDefault()
+
+    def get_user_response(self, word_list, confidence_threshold, memory, timeout=30):
+        asr = ALProxy("ALSpeechRecognition")
+        asr.setLanguage("English")
+        asr.subscribe("MyASR")
+
+        asr.pause(True)
+        asr.setVocabulary(word_list, False)  # Set the vocabulary, remove previous words
+        asr.pause(False)
+
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            time.sleep(0.1)
+            result = memory.getData("WordRecognized")
+
+            if result and result[1] >= confidence_threshold / 100.:
+                print("WordRecognized:", result)
+                return result[0]
+
+        asr.unsubscribe("MyASR")  # Unsubscribe if no word is recognized
+        return None
+
+    def detect_answer(self, detected_word):
+        # Determine the answer based on the detected word
+        answers = {
+            "happy": "output_1",
+            "sad": "output_2",
+            "angry": "output_3",
+            "neutral": "output_4"
+        }
+
+        return answers.get(detected_word, None)
+
+    def say_text(self, text, ttsProxy):
+        ttsProxy.setParameter("doubleVoice", 1.0)  # Set doubleVoice to 0 for a single voice
+        ttsProxy.setParameter("doubleVoiceLevel", 0.5)  # Adjust the doubleVoiceLevel for a subtle second voice
+        ttsProxy.setParameter("doubleVoiceTimeShift", 0.1)  # Add a slight time shift for a gentle echo effect
+        ttsProxy.setParameter("pitchShift", 1)
+        ttsProxy.setParameter("speed", 85)
+        ttsProxy.say(text)
