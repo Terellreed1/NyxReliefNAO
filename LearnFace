@@ -1,0 +1,34 @@
+from naoqi import ALProxy
+
+# NAOqi connection parameters
+ip = "192.168.192.83"
+port = 9559
+
+# Connect to the necessary modules
+faceProxy = ALProxy("ALFaceDetection", ip, port)
+memoryProxy = ALProxy("ALMemory", ip, port)
+motionProxy = ALProxy("ALMotion", ip, port)
+speechProxy = ALProxy("ALTextToSpeech", ip, port)
+
+# Function to ask for user's name
+def ask_for_name():
+    speechProxy.say("Hello! Please tell me your name.")
+    name = raw_input("Enter your name: ")  # Use raw_input for Python 2.x
+    return name
+
+# Function to learn the user's face
+def learn_face(name):
+    speechProxy.say("Okay, please look at me.")
+    # Keep NAO's head straight
+    motionProxy.setAngles("HeadPitch", 0.0, 0.1)
+    motionProxy.setAngles("HeadYaw", 0.0, 0.1)
+    faceProxy.learnFace(name)
+    speechProxy.say("Thank you! I have learned your face, " + name + ".")
+
+# Main function
+def main():
+    name = ask_for_name()
+    learn_face(name)
+
+if __name__ == "__main__":
+    main()
