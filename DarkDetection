@@ -1,0 +1,35 @@
+from naoqi import ALProxy
+
+# Replace "localhost" with the IP address of your NAO robot
+robot_ip = "172.20.95.108"
+
+# Create a proxy to the ALDarknessDetection module
+darkness_detection = ALProxy("ALDarknessDetection", robot_ip, 9559)
+
+# Create a proxy to the ALMemory module
+memory = ALProxy("ALMemory", robot_ip, 9559)
+
+# Create a proxy to the ALTextToSpeech module
+tts = ALProxy("ALTextToSpeech", robot_ip, 9559)
+
+# Subscribe to the ALDarknessDetection module
+darkness_detection.subscribe("DarknessDetection")
+
+# Get the darkness threshold
+threshold = darkness_detection.getDarknessThreshold()
+
+# Get the current darkness value from ALMemory
+darkness_value = memory.getData("DarknessDetection/DarknessValue")
+
+# Check if it is bright or dark in the room and make the robot speak accordingly
+if darkness_value < threshold:
+    tts.say("It is bright in the room.")
+else:
+    tts.say("It is dark in the room.")
+
+# Make the robot speak the darkness value and threshold
+tts.say("The darkness value is " + str(darkness_value))
+tts.say("The darkness threshold is " + str(threshold))
+
+# Unsubscribe from the ALDarknessDetection module
+darkness_detection.unsubscribe("DarknessDetection")
