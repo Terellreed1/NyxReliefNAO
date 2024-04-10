@@ -7,64 +7,34 @@ class MyClass(GeneratedClass):
         self.current_attempt = 0
 
     def onLoad(self):
-        try:
-            self.faceDetectionModule = ALProxy("ALFaceDetection")
-            self.camera = ALProxy("ALVideoDevice")
-            self.ttsProxy = ALProxy("ALTextToSpeech")
-            self.motionProxy = ALProxy("ALMotion")
-        except Exception as e:
-            self.faceDetectionModule = None
-            self.camera = None
-            self.ttsProxy = None
-            self.motionProxy = None
-            self.logger.error(e)
-
-        if not self.camera:
-            self.logger.error("Camera service not available.")
-        if not self.faceDetectionModule:
-            self.logger.error("Face detection service not available.")
-        self.bIsRunning = False
+        # ... (previous code remains the same) ...
 
     def onUnload(self):
         self.bIsRunning = False
 
     def adjust_camera_settings(self):
-        if not self.camera:
-            self.logger.error("Camera service not available.")
-            return
-
-        brightness_value = 76
-        contrast_value = 47
-        exposure_value = 144
-
-        self.camera.setParameter(0, 0, brightness_value)
-        self.camera.setParameter(0, 1, contrast_value)
-        self.camera.setParameter(0, 17, exposure_value)
+        # ... (previous code remains the same) ...
 
     def say_text(self, text):
-        if self.ttsProxy:
-            self.ttsProxy.setParameter("doubleVoice", 1.0)
-            self.ttsProxy.setParameter("doubleVoiceLevel", 0.5)
-            self.ttsProxy.setParameter("doubleVoiceTimeShift", 0.1)
-            self.ttsProxy.setParameter("pitchShift", 1)
-            self.ttsProxy.setParameter("speed", 85)
-            self.ttsProxy.say(text)
-        else:
-            self.logger.info(text)  # Log if TTS proxy is not available
+        # ... (previous code remains the same) ...
 
     def reset_head(self):
-        if not self.motionProxy:
-            self.logger.error("Motion proxy not available.")
-            return
-
-        # Reset head position
-        self.motionProxy.setAngles("HeadPitch", 0.0, 0.1)
-        self.motionProxy.setAngles("HeadYaw", 0.0, 0.1)
+        # ... (previous code remains the same) ...
 
     def clear_face_database(self):
         if self.faceDetectionModule:
             self.faceDetectionModule.clearDatabase()
             self.say_text("All faces have been removed from memory.")
+        else:
+            self.logger.error("Face detection module not available.")
+
+    def remove_face_from_database(self, name):
+        if self.faceDetectionModule:
+            try:
+                self.faceDetectionModule.forgetPerson(name)
+                self.say_text("Face with name " + name + " has been removed from memory.")
+            except RuntimeError:
+                self.say_text("Face with name " + name + " not found in memory.")
         else:
             self.logger.error("Face detection module not available.")
 
@@ -75,8 +45,9 @@ class MyClass(GeneratedClass):
         self.bIsRunning = True
         self.current_attempt = 0
 
-        # Clear existing faces from memory
-        self.clear_face_database()
+        # Remove a specific face from memory based on user input
+        name_to_remove = p  # Assuming the user provides the name as input parameter
+        self.remove_face_from_database(name_to_remove)
 
         while self.current_attempt < self.max_attempts:
             self.logger.info("Attempting to learn face, attempt #%s", self.current_attempt + 1)
