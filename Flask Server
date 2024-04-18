@@ -1,0 +1,27 @@
+from flask import Flask, request, jsonify
+import openai
+import os
+
+app = Flask(__name__)
+
+# Set your OpenAI API key here
+openai.api_key = os.getenv('OPENAI_API_KEY')  # Make sure this environment variable is set
+
+@app.route('/')
+def home():
+    return "Flask Server is running successfully!"
+
+@app.route('/ask', methods=['POST'])
+def ask():
+    user_question = request.json['question']
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",  # Ensure you have the correct model
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": user_question}
+        ]
+    )
+    return jsonify({"answer": response.choices[0].message['content']})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)  # Listens on all network interfaces
