@@ -1,0 +1,80 @@
+from naoqi import ALProxy
+import requests
+import json
+
+# Set the IP address of your NAO robot and the Flask server
+NAO_IP = "172.20.95.101"  # Replace with your NAO's actual IP
+FLASK_SERVER_IP = "172.20.95.107"  # Flask server IP
+FLASK_SERVER_PORT = 5000  # Flask server port
+
+# Initialize proxies for text-to-speech and speech recognition
+tts = ALProxy("ALTextToSpeech", NAO_IP, 9559)
+asr = ALProxy("ALSpeechRecognition", NAO_IP, 9559)
+memory = ALProxy("ALMemory", NAO_IP, 9559)
+
+# Track whether we're subscribed to the ASR service
+is_subscribed = False
+
+# Subscribe function that safely manages the subscription
+def safely_subscribe():
+    global is_subscribed
+    if not is_subscribed:
+        asr.subscribe("Test_ASR")
+        is_subscribed = True
+
+# Unsubscribe function that checks subscription status
+def safely_unsubscribe():
+    global is_subscribed
+    if is_subscribed:
+        asr.unsubscribe("Test_ASR")
+        is_subscribed = False
+
+# Ensure we're not subscribed during initial setup
+safely_unsubscribe()
+
+# Configure ASR (Automatic Speech Recognition)
+asr.setLanguage("English")
+vocabulary = ["hello", "how are you", "goodbye", "yes", "no", "please", "ask me anything"]  # Extend as needed
+asr.pause(True)
+asr.setVocabulary(vocabulary, False)
+asr.pause(False)
+
+safely_subscribe()  # Safely subscribe to ASR
+
+def onWordRecognized(value):
+    """ Callback for when a word is recognized. """
+    if value and value[1] > 0.4:  # Check confidence level
+        word = value[0]
+        if word in vocabulary:
+            if word == "ask me anything":
+                tts.say("Please type your question.")
+                question = raw_input("Enter your question: ")
+                askQuestion(question)
+        else:
+            tts.say("Phrase not recognized.")
+    asr.pause(False)
+    memory.unsubscribeToEvent("WordRecognized", "PythonModule")
+    listenForPhrase()
+
+def askQuestion(question):
+    url = "http://{}:{}/ask".format(FLASK_SERVER_IP, FLASK_SERVER_PORT)
+    response = requests.post(url, json={"question": question})
+    answer = response.json()['answer']
+    tts.say(answer)
+    listenForPhrase()
+
+def listenForPhrase():
+    tts.say("I'm ready to listen. Please say a phrase.")  # Inform the user that the NAO is ready to listen
+    memory.subscribeToEvent("WordRecognized", "PythonModule", "onWordRecognized")
+    asr.pause(False)
+
+# Start listening for phrases
+listenForPhrase()
+
+# Keep the script running
+try:
+    while True:
+        pass
+except KeyboardInterrupt:
+    safely_unsubscribe()  # Safely unsubscribe when the script is stopped
+    print("Unsubscribed and exiting...")
