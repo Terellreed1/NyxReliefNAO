@@ -1,0 +1,145 @@
+from naoqi import ALProxy
+
+class MyClass(GeneratedClass):
+    def __init__(self):
+        GeneratedClass.__init__(self, False)
+        self.max_attempts = 3
+        self.current_attempt = 0
+        self.camera = None
+        self.faceDetectionModule = None
+        self.ttsProxy = None
+        self.motionProxy = None
+        self.bIsRunning = False
+        self.darkness_detection = None
+        self.memory = None
+    def onLoad(self):
+        try:
+            self.faceDetectionModule = self.session().service("ALFaceDetection")
+            self.camera = self.session().service("ALVideoDevice")
+            self.ttsProxy = ALProxy("ALTextToSpeech")
+            self.motionProxy = ALProxy("ALMotion")
+            self.darkness_detection = ALProxy("ALDarknessDetection")
+            self.memory = ALProxy("ALMemory")
+            self.darkness_detection.subscribe("DarknessDetection")
+        except Exception as e:
+            self.logger.error(e)
+
+        if not self.camera:
+            self.logger.error("Camera service not available.")
+        if not self.faceDetectionModule:
+            self.logger.error("Face detection service not available.")
+        if not self.motionProxy:
+            self.logger.error("Motion proxy not available.")
+        if not self.ttsProxy:
+            self.logger.error("Text to speech proxy not available.")
+        if not self.darkness_detection:
+            self.logger.error("Darkness detection proxy not available.")
+        if not self.memory:
+            self.logger.error("Memory proxy not available.")
+
+    def onUnload(self):
+        self.bIsRunning = False
+        if self.darkness_detection:
+            self.darkness_detection.unsubscribe("DarknessDetection")
+
+    def adjust_camera_settings(self):
+        if not self.camera:
+            self.logger.error("Camera service not available.")
+            return
+
+        initial_brightness = self.camera.getParameter(0, 0)  # Updated method and parameter ID
+        initial_contrast = self.camera.getParameter(0, 1)
+        initial_exposure = self.camera.getParameter(0, 17)
+
+        self.say_text("Initial brightness: " + str(initial_brightness))
+        self.say_text("Initial contrast: " + str(initial_contrast))
+        self.say_text("Initial exposure: " + str(initial_exposure))
+
+        threshold = self.darkness_detection.getDarknessThreshold()
+
+        darkness_value = self.memory.getData("DarknessDetection/DarknessValue")
+
+        self.say_text("Darkness value: " + str(darkness_value))
+
+    def unlearn_face(self, p):
+        if not self.faceDetectionModule:
+            self.logger.error("Face detection service not available.")
+            return False
+
+        try:
+            return self.faceDetectionModule.forgetPerson(p)
+        except Exception as e:
+            self.logger.error("Error while attempting to unlearn face: %s", e)
+            return False
+
+    def learn_face(self, p):
+        if not self.faceDetectionModule:
+            self.logger.error("Face detection service not available.")
+            return False
+
+        try:
+            return self.faceDetectionModule.learnFace(p)
+        except Exception as e:
+            self.logger.error("Error while attempting to learn face: %s", e)
+            return False
+
+    def say_text(self, text):
+        if self.ttsProxy:
+            self.ttsProxy.setParameter("doubleVoice", 1.0)
+            self.ttsProxy.setParameter("doubleVoiceLevel", 0.5)
+            self.ttsProxy.setParameter("doubleVoiceTimeShift", 0.1)
+            self.ttsProxy.setParameter("pitchShift", 1)
+            self.ttsProxy.setParameter("speed", 85)
+            self.ttsProxy.say(text)
+        else:
+            self.logger.info(text)
+
+    def move_head(self):
+        if not self.motionProxy:
+            self.logger.error("Motion proxy not available.")
+            return
+        self.motionProxy.setAngles("HeadPitch", 0.0, 0.1)
+        self.motionProxy.setAngles("HeadYaw", 0.0, 0.1)
+
+    def attempt_face_learning(self, p, relearn=False):
+        if self.bIsRunning:
+            return
+
+        self.bIsRunning = True
+        self.current_attempt = 0
+
+        if not relearn:
+            if self.unlearn_face(p):
+                self.say_text("Face unlearned successfully.")
+            else:
+                self.say_text("Failed to unlearn face")
+                pass
+
+
+        self.adjust_camera_settings()
+
+        while self.current_attempt < self.max_attempts:
+            if relearn:
+                self.say_text("Attempting to relearn face, attempt #" + str(self.current_attempt + 1))
+            else:
+                self.say_text("Attempting to learn face, attempt #" + str(self.current_attempt + 1))
+
+            self.move_head()
+
+            if self.learn_face(p):
+                self.onSuccess()
+                self.say_text("Face learned successfully.")
+                self.bIsRunning = False
+                return
+
+            self.current_attempt += 1
+
+        self.onFailure()
+        self.say_text("Face not learned after maximum attempts.")
+        self.bIsRunning = False
+
+    def onInput_onLearn(self, p):
+        self.attempt_face_learning(p)
+
+    def onInput_onReLearn(self, p):
+        self.attempt_face_learning(p, relearn=True)
