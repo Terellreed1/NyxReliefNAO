@@ -1,0 +1,59 @@
+from naoqi import ALProxy
+import time
+import numpy as np
+
+def main(robot_ip, port=9559):
+    # Create proxies for ALFaceDetection, ALMemory, and ALTextToSpeech
+    face_detection_proxy = ALProxy("ALFaceDetection", robot_ip, port)
+    memory_proxy = ALProxy("ALMemory", robot_ip, port)
+    tts_proxy = ALProxy("ALTextToSpeech", robot_ip, port)
+
+    # Subscribe to the face detection service
+    face_detection_proxy.subscribe("FaceDetector", 500, 0.0)  # 500 ms cycle
+    print("Subscribed to face detection.")
+
+    try:
+        while True:
+            face_data = memory_proxy.getData("FaceDetected")
+
+            if face_data and len(face_data) > 1:
+                # Faces are detected
+                number_of_faces = len(face_data[1]) - 1  # Subtracting time stamp array
+                if number_of_faces > 0:
+                    print("{} faces detected.".format(number_of_faces))
+                    tts_proxy.say("{} faces detected.".format(number_of_faces))
+                    for face_info in face_data[1][:-1]:  # Iterating over detected faces
+                        print("Face Info:")
+                        print("Face Bounding Box (TopLeftX, TopLeftY, Width, Height):", face_info[0])
+
+                        # Extract and process color pixel data
+                        face_height, face_width, channels, face_data = face_info[5]
+                        face_pixels = np.frombuffer(face_data, dtype=np.uint8).reshape(face_height, face_width, channels)
+
+                        # You can process or display the face pixel data here
+                        # Example: Display the face image using OpenCV
+                        import cv2
+                        cv2.imshow("Face", face_pixels)
+                        cv2.waitKey(1)  # Wait for 1 millisecond (required for OpenCV display)
+
+                else:
+                    print("No faces detected.")
+                    tts_proxy.say("No faces detected.")
+            else:
+                print("No faces detected.")
+                tts_proxy.say("No faces detected.")
+
+            time.sleep(1)  # Check every second
+
+    except KeyboardInterrupt:
+        print("Interrupted by user, stopping...")
+
+    finally:
+        # Unsubscribe from face detection
+        face_detection_proxy.unsubscribe("FaceDetector")
+        print("Unsubscribed from face detection and cleaned up.")
+
+if __name__ == "__main__":
+    # IP address of the NAO robot
+    robot_ip = "172.20.95.101"  # Change to your NAO's IP address
+    main(robot_ip)
