@@ -1,0 +1,42 @@
+from naoqi import ALProxy
+import time
+
+def main(robot_ip, port=9559):
+    # Create proxies for ALFaceDetection, ALMemory, and ALTextToSpeech
+    face_detection_proxy = ALProxy("ALFaceDetection", robot_ip, port)
+    memory_proxy = ALProxy("ALMemory", robot_ip, port)
+    tts_proxy = ALProxy("ALTextToSpeech", robot_ip, port)
+
+    # Subscribe to the face detection service
+    face_detection_proxy.subscribe("FaceDetector", 500, 0.0)  # 500 ms cycle
+    print("Subscribed to face detection.")
+
+    try:
+        # Check ALMemory for face detection results periodically
+        while True:
+            face_data = memory_proxy.getData("FaceDetected")
+            if face_data and len(face_data) > 1:
+                # Faces are detected
+                number_of_faces = len(face_data[1]) - 1  # Subtracting time stamp array
+                if number_of_faces > 0:
+                    print("{} faces detected.".format(number_of_faces))
+                    tts_proxy.say("{} faces detected.".format(number_of_faces))
+                else:
+                    print("No faces detected.")
+            else:
+                print("No faces detected.")
+
+            time.sleep(1)  # Check every second
+
+    except KeyboardInterrupt:
+        print("Interrupted by user, stopping...")
+
+    finally:
+        # Unsubscribe from face detection
+        face_detection_proxy.unsubscribe("FaceDetector")
+        print("Unsubscribed from face detection and cleaned up.")
+
+if __name__ == "__main__":
+    # IP address of the NAO robot
+    robot_ip = "172.20.95.101"  # Change to your NAO's IP address
+    main(robot_ip)
