@@ -1,3 +1,7 @@
+The BEST way to get detailed Method/Module information is to ask the robot. Connect via SSH (the default username and password are both nao) and run the command (without quotes) "qicli info" to get a list of running methods. 
+Then you can run that command for each method to get the list of modules within that method.
+So for example you could enter qicli info ALMemory to see all the modules running in ALMemory.
+
 You can call methods using "qicli call" like qicli call ALMotion.setAngles RShoulderPitch 0.7 0.2  which would rotate the right shoulder pitch motor to 0.7 radians at 20% of its maximum speed. 
 
 For help with syntax the methods, most modules include a method called "getMethodHelp" so you would use the command: qicli call ALMotion.getMethodHelp setAngles
