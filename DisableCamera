@@ -1,0 +1,20 @@
+from naoqi import ALProxy
+
+# IP address and port of your Nao robot
+nao_ip = "172.20.95.101"
+nao_port = 9559
+
+# Connect to the Nao robot
+nao_camera = ALProxy("ALVideoDevice", nao_ip, nao_port)
+
+# Get the list of subscribers to the camera module
+subscribers = nao_camera.getSubscribers()
+
+# Assuming there's only one camera module subscribed
+# Get the camera ID from the first subscriber
+if subscribers:
+    camera_id = subscribers[0]
+    # Set the camera resolution to a very low value or disable it
+    nao_camera.setResolution(camera_id, 0)  # You may need to adjust the resolution value
+else:
+    print("No subscribers found to the camera module.")
