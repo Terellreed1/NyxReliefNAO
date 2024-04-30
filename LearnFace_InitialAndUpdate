@@ -1,0 +1,92 @@
+class MyClass(GeneratedClass):
+    def __init__(self):
+        GeneratedClass.__init__(self, False)
+        self.max_attempts = 3
+        self.current_attempt = 0
+
+        # Set logging level to DEBUG
+        logging.basicConfig(level=logging.DEBUG)
+
+    def onLoad(self):
+        try:
+            self.faceDetectionModule = self.session().service("ALFaceDetection")
+            self.camera = self.session().service("ALVideoDevice")
+        except Exception as e:
+            self.faceDetectionModule = None
+            self.camera = None
+            self.logger.error(e)
+
+        if not self.camera:
+            self.logger.error("Camera service not available.")
+        if not self.faceDetectionModule:
+            self.logger.error("Face detection service not available.")
+
+        self.bIsRunning = False
+
+    def onUnload(self):
+        self.bIsRunning = False
+
+    def adjust_camera_settings(self):
+        if not self.camera:
+            self.logger.error("Camera service not available.")
+            return
+
+        # Get initial camera parameters
+        initial_brightness = self.camera.getParameter(0, 0)  # Updated method and parameter ID
+        initial_contrast = self.camera.getParameter(0, 1)
+        initial_exposure = self.camera.getParameter(0, 17)
+
+        logging.debug("Initial brightness: %s", initial_brightness)
+        logging.debug("Initial contrast: %s", initial_contrast)
+        logging.debug("Initial exposure: %s", initial_exposure)
+
+        # Adjust camera settings
+        brightness_value = 76
+        contrast_value = 47
+        exposure_value = 144
+
+        self.camera.setParameter(0, 0, brightness_value)  # Updated method and parameter ID
+        self.camera.setParameter(0, 1, contrast_value)
+        self.camera.setParameter(0, 17, exposure_value)
+        self.camera.setResolution("k16VGA",4)
+
+        # Get updated camera parameters
+        updated_brightness = self.camera.getParameter(0, 0)
+        updated_contrast = self.camera.getParameter(0, 1)
+        updated_exposure = self.camera.getParameter(0, 17)
+
+        logging.debug("Updated brightness: %s", updated_brightness)
+        logging.debug("Updated contrast: %s", updated_contrast)
+        logging.debug("Updated exposure: %s", updated_exposure)
+
+    def onInput_onLearn(self, p):
+        if self.bIsRunning:
+            return
+        self.bIsRunning = True
+        self.current_attempt = 0
+        while self.current_attempt < self.max_attempts:
+            logging.debug("Attempting to learn face, attempt #%s", self.current_attempt + 1)
+            self.adjust_camera_settings()
+            if self.faceDetectionModule and self.faceDetectionModule.learnFace(p):
+                self.onSuccess()
+                self.bIsRunning = False
+                return
+            self.current_attempt += 1
+        self.onFailure()
+        self.bIsRunning = False
+
+    def onInput_onReLearn(self, p):
+        if self.bIsRunning:
+            return
+        self.bIsRunning = True
+        self.current_attempt = 0
+        while self.current_attempt < self.max_attempts:
+            logging.debug("Attempting to relearn face, attempt #%s", self.current_attempt + 1)
+            self.adjust_camera_settings()
+            if self.faceDetectionModule and self.faceDetectionModule.reLearnFace(p):
+                self.onSuccess()
+                self.bIsRunning = False
+                return
+            self.current_attempt += 1
+        self.onFailure()
+        self.bIsRunning = False
