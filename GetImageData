@@ -1,0 +1,32 @@
+from naoqi import ALProxy
+
+# Robot's IP address
+IP = "172.20.95.101"
+PORT = 9559
+
+# Create a proxy to ALVideoDevice
+video_device = ALProxy("ALVideoDevice", IP, PORT)
+
+# Subscribe to the front camera, camera index 0, resolution 1 (320x240), color space 11 (RGB), and 10 FPS
+camera_subscription = video_device.subscribeCamera(
+    "camera_test", 0, 1, 11, 10
+)
+
+try:
+    # Get an image
+    image_data = video_device.getImageRemote(camera_subscription)
+
+    if image_data:
+        # Process your image data here
+        width = image_data[0]
+        height = image_data[1]
+        array = image_data[6]
+        # For demonstration, just print out some basic information
+        print("Image captured: Width =", width, "Height =", height)
+    else:
+        print("Failed to capture image")
+
+finally:
+    # Unsubscribe from the camera feed
+    video_device.unsubscribe(camera_subscription)
+    print("Camera subscription ended.")
