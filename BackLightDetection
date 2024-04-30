@@ -1,0 +1,68 @@
+from naoqi import ALProxy
+import numpy as np  # Ensure numpy is imported at the beginning of the script
+
+# Robot's IP address
+IP = "172.20.95.101"
+PORT = 9559
+
+def calculate_brightness(image_data):
+    # Convert image data to a numpy array to facilitate calculations
+    image_array = np.frombuffer(image_data, dtype=np.uint8)
+    image_array = image_array.reshape((240, 320, 3))  # Reshape to the correct dimensions (Height, Width, Channels)
+    
+    # Calculate average brightness (using a simple average over all pixels and channels)
+    average_brightness = np.mean(image_array)
+    return average_brightness
+
+def describe_brightness(brightness):
+    # Determine qualitative brightness description
+    if brightness >= 200:
+        return "very bright"
+    elif brightness >= 100:
+        return "bright"
+    elif brightness > 10:
+        return "dim"
+    else:
+        return "no backlight"
+
+def speak_brightness(brightness, tts_proxy):
+    # Get descriptive text based on brightness
+    description = describe_brightness(brightness)
+    message = "The backlight levels are {:.2f}, which is {}.".format(brightness, description)
+    
+    # Speak the basic brightness level and description
+    tts_proxy.say(message)
+
+    # Additional advice for very bright conditions
+    if description == "very bright":
+        advice = "To capture a better photo for analysis, you may want to move to a different spot where there is less backlight."
+        tts_proxy.say(advice)
+
+# Create proxies to ALVideoDevice and ALTextToSpeech
+video_device = ALProxy("ALVideoDevice", IP, PORT)
+tts_proxy = ALProxy("ALTextToSpeech", IP, PORT)
+
+# Subscribe to the front camera, camera index 0, resolution 1 (320x240), color space 11 (RGB), and 10 FPS
+camera_subscription = video_device.subscribeCamera(
+    "camera_test", 0, 1, 11, 10
+)
+
+try:
+    # Get an image
+    image_data = video_device.getImageRemote(camera_subscription)
+
+    if image_data:
+        # Calculate brightness
+        brightness = calculate_brightness(image_data[6])
+        print("Image captured: Width =", image_data[0], "Height =", image_data[1])
+        print("Average brightness of the image: {:.2f}".format(brightness))
+        # Speak the brightness, its description, and provide additional advice if necessary
+        speak_brightness(brightness, tts_proxy)
+    else:
+        print("Failed to capture image")
+        tts_proxy.say("Failed to capture image.")
+
+finally:
+    # Unsubscribe from the camera feed
+    video_device.unsubscribe(camera_subscription)
+    print("Camera subscription ended.")
