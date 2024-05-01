@@ -1,0 +1,55 @@
+import qi
+import numpy as np
+from PIL import Image
+
+def main():
+    # Connect to the NAOqi session
+    ip = "172.20.95.101"
+    port = 9559
+    session = qi.Session()
+    try:
+        session.connect("tcp://" + ip + ":" + str(port))
+    except Exception as e:
+        print("Error:", e)
+        return
+
+    # Create a proxy for the ALVideoDevice service
+    video_service = session.service("ALVideoDevice")
+
+    # Set the camera resolution and framerate
+    resolution = 2  # VGA
+    color_space = 11  # RGB
+    fps = 30
+    camera_id = 0  # Top camera
+
+    # Subscribe to the camera image
+    video_client = video_service.subscribeCamera("python_client", camera_id, resolution, color_space, fps)
+
+    # Capture an image
+    print("Capturing image...")
+    image = video_service.getImageRemote(video_client)
+    img_width = image[0]
+    img_height = image[1]
+    img_array = bytes(image[6])
+
+    # Convert the image array to a format compatible with PIL
+    pil_img = Image.frombytes("RGB", (img_width, img_height), img_array)
+
+    # Display the image
+    print("Displaying image...")
+    pil_img.show()
+
+    # Print color pixels
+    print("Printing color pixels...")
+    pixels = pil_img.load()
+    for y in range(img_height):
+        for x in range(img_width):
+            r, g, b = pixels[x, y]
+            print("Pixel at ({}, {}): R={}, G={}, B={}".format(x, y, r, g, b))
+
+    # Unsubscribe from the camera
+    print("Unsubscribing from camera...")
+    video_service.unsubscribe(video_client)
+
+if __name__ == "__main__":
+    main()
