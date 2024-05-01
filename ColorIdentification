@@ -1,0 +1,80 @@
+import qi
+import numpy as np
+from PIL import Image
+
+def get_dominant_color(pixels, img_width, img_height):
+    # Count occurrences of each color
+    color_counts = {}
+    for y in range(img_height):
+        for x in range(img_width):
+            color = pixels[x, y]
+            if color in color_counts:
+                color_counts[color] += 1
+            else:
+                color_counts[color] = 1
+
+    # Find the most frequent color
+    max_count = 0
+    dominant_color = None
+    for color, count in color_counts.items():
+        if count > max_count:
+            max_count = count
+            dominant_color = color
+
+    return dominant_color
+
+def identify_color(rgb):
+    r, g, b = rgb
+    if r > 150 and g < 100 and b < 100:
+        return "Red"
+    elif r < 50 and g < 50 and b < 50:
+        return "Black"
+    elif r > 100 and g > 50 and b < 50:
+        return "Brown"
+    # Add more color identification logic as needed
+
+def main():
+    # Connect to the NAOqi session
+    ip = "172.20.95.101"
+    port = 9559
+    session = qi.Session()
+    try:
+        session.connect("tcp://" + ip + ":" + str(port))
+    except Exception as e:
+        print("Error:", e)
+        return
+
+    # Create a proxy for the ALVideoDevice service
+    video_service = session.service("ALVideoDevice")
+
+    # Set the camera resolution and framerate
+    resolution = 2  # VGA
+    color_space = 11  # RGB
+    fps = 30
+    camera_id = 0  # Top camera
+
+    # Subscribe to the camera image
+    video_client = video_service.subscribeCamera("python_client", camera_id, resolution, color_space, fps)
+
+    # Continuous image capture and color identification
+    print("Capturing and identifying colors...")
+    while True:
+        # Capture an image
+        image = video_service.getImageRemote(video_client)
+        img_width = image[0]
+        img_height = image[1]
+        img_array = bytes(image[6])
+
+        # Convert the image array to a format compatible with PIL
+        pil_img = Image.frombytes("RGB", (img_width, img_height), img_array)
+
+        # Get color pixels
+        pixels = pil_img.load()
+        dominant_color = get_dominant_color(pixels, img_width, img_height)
+        identified_color = identify_color(dominant_color)
+
+        # Print identified color
+        print("Identified color:", identified_color)
+
+if __name__ == "__main__":
+    main()
