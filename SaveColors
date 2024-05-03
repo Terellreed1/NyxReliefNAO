@@ -1,0 +1,96 @@
+import qi
+from PIL import Image
+import os
+import logging
+import time
+import numpy as np
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Constants
+IMAGE_FOLDER = 'labeled_images'
+COLOR_THRESHOLD = 50  # Threshold for color comparison
+
+# Dictionary to store color information for each label
+label_colors = {}
+
+def setup_directories():
+    if not os.path.exists(IMAGE_FOLDER):
+        os.makedirs(IMAGE_FOLDER)
+        logging.info("Created directory {} for storing labeled images.".format(IMAGE_FOLDER))
+
+def countdown(tts, seconds=3):
+    for i in range(seconds, 0, -1):
+        tts.say(str(i))
+        time.sleep(1)  # Wait for a second before continuing the countdown
+
+def capture_image(session):
+    logging.debug("Starting image capture.")
+    video_service = session.service("ALVideoDevice")
+    resolution = 2  # VGA
+    color_space = 11  # RGB
+    fps = 10
+    camera_id = 0  # Top camera
+    video_client = video_service.subscribeCamera("python_client", camera_id, resolution, color_space, fps)
+    
+    tts = session.service("ALTextToSpeech")
+    countdown(tts)  # Perform countdown before capturing the image
+    
+    frame = video_service.getImageRemote(video_client)
+    video_service.unsubscribe(video_client)
+
+    image = Image.frombytes('RGB', (frame[0], frame[1]), bytes(frame[6]))
+    logging.info("Image captured successfully.")
+    return image
+
+def save_image(image, label):
+    directory = os.path.join(IMAGE_FOLDER, label)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+        logging.info("Created directory {} for label '{}'.".format(directory, label))
+    
+    image_path = os.path.join(directory, "{}.png".format(len(os.listdir(directory)) + 1))
+    image.save(image_path)
+    logging.info("Image saved to {}".format(image_path))
+    
+    # Store color information for the label
+    if label not in label_colors:
+        label_colors[label] = []
+    
+    # Extract and store color information from the image
+    pixels = np.array(image)
+    average_color = np.mean(pixels, axis=(0, 1))  # Calculate average color of the image
+    label_colors[label].append(average_color)
+
+def find_matching_color(label, image):
+    if label in label_colors:
+        pixels = np.array(image)
+        average_color = np.mean(pixels, axis=(0, 1))  # Calculate average color of the image
+        for color in label_colors[label]:
+            if np.linalg.norm(color - average_color) < COLOR_THRESHOLD:
+                return True
+    return False
+
+def main():
+    setup_directories()
+    ip = "172.20.95.101"  # Change to your Pepper's IP
+    port = 9559
+    session = qi.Session()
+    try:
+        session.connect("tcp://{}:{}".format(ip, port))
+        logging.info("Connected to Pepper robot.")
+        
+        while True:
+            img = capture_image(session)
+            label = input("Enter the label for the image: ")  # Use raw_input() if using Python 2
+            if find_matching_color(label, img):
+                logging.info("Found matching color for label '{}' in previous images.".format(label))
+            else:
+                save_image(img, label)
+
+    except Exception as e:
+        logging.error("Error connecting to robot: {}".format(e))
+
+if __name__ == '__main__':
+    main()
