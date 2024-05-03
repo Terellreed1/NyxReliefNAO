@@ -1,0 +1,82 @@
+import qi
+from PIL import Image
+import os
+import logging
+import numpy as np
+import time
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Constants
+IMAGE_FOLDER = 'labeled_images'
+COLOR_THRESHOLD = 50  # Threshold for color comparison
+CAMERA_RESOLUTION = 2  # VGA resolution
+CAMERA_COLOR_SPACE = 11  # RGB color space
+CAMERA_FPS = 10
+CAMERA_ID = 0  # Top camera
+
+# Dictionary to store color information for each label
+label_colors = {}
+
+def find_matching_label(image):
+    global label_colors
+    pixels = np.array(image)
+    average_color = np.mean(pixels, axis=(0, 1))  # Calculate average color of the image
+    for label, colors in label_colors.items():
+        for color in colors:
+            if np.linalg.norm(color - average_color) < COLOR_THRESHOLD:
+                return label
+    return None
+
+def capture_image(video_service, video_client):
+    frame = video_service.getImageRemote(video_client)
+    image = Image.frombytes('RGB', (frame[0], frame[1]), bytes(frame[6]))
+    return image
+
+def main():
+    ip = "172.20.95.101"  # Change to your Pepper's IP
+    port = 9559
+    session = qi.Session()
+    video_client = None  # Define video_client variable
+    try:
+        session.connect("tcp://{}:{}".format(ip, port))
+        logging.info("Connected to Pepper robot.")
+        
+        video_service = session.service("ALVideoDevice")
+        video_client = video_service.subscribeCamera("python_client", CAMERA_ID, CAMERA_RESOLUTION, CAMERA_COLOR_SPACE, CAMERA_FPS)
+
+        # Load labeled images and their colors
+        for label_folder in os.listdir(IMAGE_FOLDER):
+            label_path = os.path.join(IMAGE_FOLDER, label_folder)
+            if os.path.isdir(label_path):
+                label = label_folder
+                for image_file in os.listdir(label_path):
+                    if image_file.endswith(".png"):
+                        image_path = os.path.join(label_path, image_file)
+                        image = Image.open(image_path)
+                        pixels = np.array(image)
+                        average_color = np.mean(pixels, axis=(0, 1))
+                        if label not in label_colors:
+                            label_colors[label] = []
+                        label_colors[label].append(average_color)
+                        logging.debug("Loaded image '{}' with label '{}' and average color {}".format(image_file, label, average_color))
+
+        # Continuous image capture and label matching
+        while True:
+            img = capture_image(video_service, video_client)
+            label = find_matching_label(img)
+            if label:
+                logging.info("Matching label found: '{}'".format(label))
+            else:
+                logging.info("No matching label found.")
+            time.sleep(1)  # Adjust the interval as needed
+
+    except Exception as e:
+        logging.error("Error: {}".format(e))
+    finally:
+        if video_client:
+            video_service.unsubscribe(video_client)
+
+if __name__ == '__main__':
+    main()
