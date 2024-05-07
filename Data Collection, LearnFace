@@ -12,6 +12,7 @@ class MyClass(GeneratedClass):
         self.bIsRunning = False
         self.darkness_detection = None
         self.memory = None
+        self.backlighting_detection = None
     def onLoad(self):
         try:
             self.faceDetectionModule = self.session().service("ALFaceDetection")
@@ -21,6 +22,7 @@ class MyClass(GeneratedClass):
             self.darkness_detection = ALProxy("ALDarknessDetection")
             self.memory = ALProxy("ALMemory")
             self.darkness_detection.subscribe("DarknessDetection")
+            self.backlighting_detection = ALProxy("ALBacklightingDetection")  # Added
         except Exception as e:
             self.logger.error(e)
 
@@ -36,6 +38,8 @@ class MyClass(GeneratedClass):
             self.logger.error("Darkness detection proxy not available.")
         if not self.memory:
             self.logger.error("Memory proxy not available.")
+        if not self.backlighting_detection:  # Added
+            self.logger.error("Backlighting detection proxy not available.")
 
     def onUnload(self):
         self.bIsRunning = False
@@ -46,7 +50,6 @@ class MyClass(GeneratedClass):
         if not self.camera:
             self.logger.error("Camera service not available.")
             return
-
         initial_brightness = self.camera.getParameter(0, 0)  # Updated method and parameter ID
         initial_contrast = self.camera.getParameter(0, 1)
         initial_exposure = self.camera.getParameter(0, 17)
@@ -56,10 +59,39 @@ class MyClass(GeneratedClass):
         self.say_text("Initial exposure: " + str(initial_exposure))
 
         threshold = self.darkness_detection.getDarknessThreshold()
-
         darkness_value = self.memory.getData("DarknessDetection/DarknessValue")
 
         self.say_text("Darkness value: " + str(darkness_value))
+
+        if self.backlighting_detection:  # Check if available
+            try:
+                self.backlighting_detection.subscribe("isBacklit")
+                backlighting_value = self.memory.getData("BacklightingDetection/BacklightingValue")
+                if backlighting_value == 0:
+                    self.say_text("No backlight detected.")
+                elif backlighting_value == 1:
+                    self.say_text("Possible backlight detected.")
+                else:
+                    self.say_text("Backlight detected.")
+                self.backlighting_detection.unsubscribe("isBacklit")
+            except Exception as e:
+                self.logger.error("Error in backlighting detection: %s", e)
+        else:
+            self.logger.error("Backlighting detection service not available.")
+            
+        brightness_value = 61
+        contrast_value = 32
+        exposure_value = 510
+
+        self.camera.setParameter(0, 0, brightness_value)
+        self.camera.setParameter(0, 1, contrast_value)
+        self.camera.setParameter(0, 17, exposure_value)
+        threshold = self.darkness_detection.getDarknessThreshold()
+        updated_darkness_value = self.memory.getData("DarknessDetection/DarknessValue")
+        
+        self.say_text("Updated Brightness value: " + str(self.camera.getParameter(0, 0)))
+        self.say_text("Updated Contrast value: " + str(self.camera.getParameter(0, 1)))
+        self.say_text("Updated Darkness value: " + str(updated_darkness_value))
 
     def unlearn_face(self, p):
         if not self.faceDetectionModule:
@@ -98,6 +130,8 @@ class MyClass(GeneratedClass):
         if not self.motionProxy:
             self.logger.error("Motion proxy not available.")
             return
+
+        # Reset head position
         self.motionProxy.setAngles("HeadPitch", 0.0, 0.1)
         self.motionProxy.setAngles("HeadYaw", 0.0, 0.1)
 
@@ -107,6 +141,7 @@ class MyClass(GeneratedClass):
 
         self.bIsRunning = True
         self.current_attempt = 0
+        self.move_head()
 
         if not relearn:
             if self.unlearn_face(p):
@@ -117,14 +152,13 @@ class MyClass(GeneratedClass):
 
 
         self.adjust_camera_settings()
+        self.move_head()
 
         while self.current_attempt < self.max_attempts:
             if relearn:
                 self.say_text("Attempting to relearn face, attempt #" + str(self.current_attempt + 1))
             else:
                 self.say_text("Attempting to learn face, attempt #" + str(self.current_attempt + 1))
-
-            self.move_head()
 
             if self.learn_face(p):
                 self.onSuccess()
