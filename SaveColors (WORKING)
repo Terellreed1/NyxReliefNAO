@@ -1,3 +1,5 @@
+#for the label, make sure to put quotations around the word 
+
 import qi
 from PIL import Image
 import os
