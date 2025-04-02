@@ -1,0 +1,128 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import time
+import random
+from naoqi import ALProxy
+
+def main(robot_ip="172.20.95.116", robot_port=9559):
+    try:
+        speech_recog = ALProxy("ALSpeechRecognition", robot_ip, robot_port)
+        tts = ALProxy("ALTextToSpeech", robot_ip, robot_port)
+        memory = ALProxy("ALMemory", robot_ip, robot_port)
+        motion = ALProxy("ALMotion", robot_ip, robot_port)
+        
+        tts.setVolume(1.0)
+        motion.wakeUp()
+        
+        speech_recog.pause(True)
+        speech_recog.setLanguage("English")
+        
+        vocabulary = [
+            "I feel stressed", "help me relax", "breathing exercise", 
+            "meditation", "mindfulness", "anxiety", "feeling overwhelmed",
+            "need to calm down", "relaxation techniques", "stress relief",
+            "tell me a positive affirmation", "guided relaxation",
+            "help me sleep", "work stress", "too much pressure",
+            "how are you", "thank you", "goodbye"
+        ]
+        speech_recog.setVocabulary(vocabulary, False)
+        speech_recog.pause(False)
+        
+        tts.say("Hello, I am your wellness assistant. I'm here to help you manage stress and promote relaxation.")
+        tts.say("You can ask me about breathing exercises, meditation, or just tell me you're feeling stressed.")
+        
+        speech_recog.subscribe("WellnessBotSpeechRecognition")
+        
+        print("Wellness Bot activated. Ready to help with stress management...")
+        tts.say("I'm listening. Please tell me how you're feeling or how I can help.")
+        
+        breathing_exercises = [
+            "Let's try a simple breathing exercise. Inhale deeply through your nose for 4 counts, hold for 2, and exhale slowly through your mouth for 6 counts. Let's do this together 3 times.",
+            "Try this breathing technique: breathe in through your nose for 5 seconds, hold for 2 seconds, then exhale through your mouth for 8 seconds. This helps activate your parasympathetic nervous system.",
+            "Square breathing can help reduce stress. Breathe in for 4 counts, hold for 4, exhale for 4, and hold again for 4. Visualize tracing a square as you breathe."
+        ]
+        
+        affirmations = [
+            "You are capable and strong. This difficult moment will pass.",
+            "You have overcome challenges before, and you will overcome this one too.",
+            "Take it one step at a time. You don't have to solve everything at once.",
+            "Your worth is not determined by your productivity. It's okay to rest.",
+            "You are doing the best you can with what you have, and that is enough."
+        ]
+        
+        quick_relaxation_tips = [
+            "Try tensing all your muscles tightly for 5 seconds, then release completely. Notice the sensation of relaxation flowing through your body.",
+            "Place your hand on your heart and take 3 slow breaths. This simple gesture can help activate your body's calming response.",
+            "Take a moment to focus on 5 things you can see, 4 things you can touch, 3 things you can hear, 2 things you can smell, and 1 thing you can taste. This grounding exercise can help reduce anxiety.",
+            "Gently roll your shoulders backward 3 times, then forward 3 times. Now tilt your head side to side. Physical tension often accompanies mental stress."
+        ]
+        
+        try:
+            while True:
+                recognized_words = memory.getData("WordRecognized")
+                
+                if recognized_words and len(recognized_words) >= 2:
+                    word = recognized_words[0]
+                    confidence = recognized_words[1]
+                    
+                    if confidence > 0.4:
+                        print("Recognized: '%s' with confidence %s" % (word, confidence))
+                        
+                        if any(phrase in word for phrase in ["breathing exercise", "help me relax", "need to calm down"]):
+                            response = random.choice(breathing_exercises)
+                            tts.say(response)
+                        
+                        elif any(phrase in word for phrase in ["feel stressed", "anxiety", "overwhelmed", "too much pressure", "work stress"]):
+                            tts.say("I understand you're feeling stressed. That's a normal human response to pressure.")
+                            tts.say("Remember that you don't have to face these feelings alone.")
+                            tts.say(random.choice(quick_relaxation_tips))
+                        
+                        elif "affirmation" in word:
+                            tts.say(random.choice(affirmations))
+                        
+                        elif any(phrase in word for phrase in ["meditation", "mindfulness", "guided relaxation"]):
+                            tts.say("Let me guide you through a brief mindfulness exercise.")
+                            tts.say("Find a comfortable position and gently close your eyes if that feels right.")
+                            tts.say("Focus your attention on your breath, without trying to change it.")
+                            tts.say("Notice the sensation of air flowing in and out of your nostrils.")
+                            tts.say("When your mind wanders, gently bring your attention back to your breath.")
+                            tts.say("Let's continue this for the next 30 seconds.")
+                            time.sleep(10)
+                            tts.say("Notice any sounds in your environment.")
+                            time.sleep(10)
+                            tts.say("Now become aware of your body and how it feels.")
+                            time.sleep(10)
+                            tts.say("When you're ready, gently open your eyes. How do you feel?")
+                        
+                        elif "help me sleep" in word:
+                            tts.say("To prepare for sleep, try progressive muscle relaxation.")
+                            tts.say("Start by tensing your toes for 5 seconds, then release.")
+                            tts.say("Work your way up through each muscle group to your head.")
+                            tts.say("Also, try to avoid screens at least 30 minutes before bedtime.")
+                        
+                        elif "how are you" in word:
+                            tts.say("I'm here and ready to help you with your wellness needs. How are you feeling today?")
+                        
+                        elif "thank you" in word:
+                            tts.say("You're welcome. Remember to be kind to yourself. I'm here whenever you need support.")
+                        
+                        elif "goodbye" in word:
+                            tts.say("Goodbye. Remember to take moments for yourself throughout your day. I'll be here when you need me.")
+                        
+                        memory.insertData("WordRecognized", [])
+                
+                time.sleep(0.1)
+                
+        except KeyboardInterrupt:
+            print("Stopping wellness bot...")
+            tts.say("I hope you're feeling more relaxed. Take care of yourself.")
+            speech_recog.unsubscribe("WellnessBotSpeechRecognition")
+            motion.rest()
+    
+    except Exception as e:
+        print("Error occurred: %s" % e)
+        return
+
+if __name__ == "__main__":
+    main()
