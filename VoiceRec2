@@ -1,0 +1,264 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+
+
+import time
+import random
+import os
+import sys
+import json
+import urllib2  # Python 2.7 HTTP library
+from naoqi import ALProxy
+
+# Set OpenAI API key directly in the code (for testing/development)
+OPENAI_API_KEY = "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"
+
+def get_openai_response(prompt, max_tokens=150):
+    """
+    Get a response from OpenAI's GPT model using direct HTTP request.
+    
+    Args:
+        prompt (str): The input prompt to send to OpenAI
+        max_tokens (int): Maximum number of tokens in the response
+        
+    Returns:
+        str: The generated response
+    """
+    try:
+        # Prepare the request to OpenAI - using the chat completions endpoint
+        url = "https://api.openai.com/v1/chat/completions"
+        
+        # Create the request headers
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer {}".format(OPENAI_API_KEY)
+        }
+        
+        # Create the request data
+        data = {
+            "model": "gpt-3.5-turbo",
+            "messages": [
+                {
+                    "role": "system", 
+                    "content": "You are a helpful wellness and stress management assistant. Provide brief, compassionate responses focused on stress reduction, relaxation techniques, and mental wellbeing. Keep responses under 3 sentences when possible."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "max_tokens": max_tokens,
+            "temperature": 0.7
+        }
+        
+        # Encode data to JSON
+        json_data = json.dumps(data)
+        
+        # Create the request
+        req = urllib2.Request(url, json_data, headers)
+        
+        # Send the request and get the response
+        response = urllib2.urlopen(req)
+        
+        # Parse the response
+        result = json.loads(response.read())
+        
+        # Extract the text from the response - different structure for chat completions
+        if 'choices' in result and len(result['choices']) > 0:
+            response_text = result['choices'][0]['message']['content'].strip()
+            # Ensure the response is a valid string
+            return str(response_text)
+        else:
+            return "I'm here to help with stress management techniques."
+            
+    except Exception as e:
+        print("OpenAI API error: {}".format(e))
+        # Fallback responses if API fails
+        fallback_responses = [
+            "I'm here to help you manage stress. Let's focus on your breathing for a moment.",
+            "Remember that self-care is important. What's one small thing you could do for yourself today?",
+            "Taking a few deep breaths can help reset your nervous system when you're feeling overwhelmed."
+        ]
+        return str(random.choice(fallback_responses))
+
+def main(robot_ip="172.20.95.120", robot_port=9559):
+    """
+    Main function for the NAO Wellness Bot focused on stress management.
+    
+    Args:
+        robot_ip (str): IP address of the NAO robot
+        robot_port (int): Port number for NAOqi
+    """
+    try:
+        # Initialize required modules
+        speech_recog = ALProxy("ALSpeechRecognition", robot_ip, robot_port)
+        tts = ALProxy("ALTextToSpeech", robot_ip, robot_port)
+        memory = ALProxy("ALMemory", robot_ip, robot_port)
+        motion = ALProxy("ALMotion", robot_ip, robot_port)
+        
+        # Set volume to 100%
+        tts.setVolume(1.0)
+        
+        # Wake up the robot
+        motion.wakeUp()
+        
+        # First pause the ASR engine
+        speech_recog.pause(True)
+        
+        # Set the language
+        speech_recog.setLanguage("English")
+        
+        # Define the wellness and stress management vocabulary
+        vocabulary = [
+            "I feel stressed", "help me relax", "breathing exercise", 
+            "meditation", "mindfulness", "anxiety", "feeling overwhelmed",
+            "need to calm down", "relaxation techniques", "stress relief",
+            "tell me a positive affirmation", "guided relaxation",
+            "help me sleep", "work stress", "too much pressure",
+            "how are you", "thank you", "goodbye",
+            "I'm sad", "I feel sad", "I'm feeling sad", "sadness",
+            "I'm happy", "I feel happy", "I'm feeling happy", "happiness",
+            "I'm angry", "I feel angry", "I'm depressed", "I feel depressed",
+            "I'm anxious", "I'm worried", "I'm excited", "I'm frustrated"
+        ]
+        speech_recog.setVocabulary(vocabulary, False)
+        
+        # Resume the ASR engine
+        speech_recog.pause(False)
+        
+        # Wellness bot introduction
+        tts.say("Hello, I am your wellness assistant with AI capabilities. I'm here to help you manage stress and promote relaxation.")
+        tts.say("You can ask me about breathing exercises, meditation, or just tell me you're feeling stressed.")
+        
+        # Subscribe to the speech recognition service
+        speech_recog.subscribe("WellnessBotSpeechRecognition")
+        
+        print("AI-Enhanced Wellness Bot activated. Ready to help with stress management...")
+        tts.say("I'm listening. Please tell me how you're feeling or how I can help.")
+        
+        # Create local response library for fallback and specific scenarios
+        breathing_exercises = [
+            "Let's try a simple breathing exercise. Inhale deeply through your nose for 4 counts, hold for 2, and exhale slowly through your mouth for 6 counts. Let's do this together 3 times.",
+            "Try this breathing technique: breathe in through your nose for 5 seconds, hold for 2 seconds, then exhale through your mouth for 8 seconds. This helps activate your parasympathetic nervous system.",
+            "Square breathing can help reduce stress. Breathe in for 4 counts, hold for 4, exhale for 4, and hold again for 4. Visualize tracing a square as you breathe."
+        ]
+        
+        # Main interaction loop
+        try:
+            while True:
+                # Check if NAO recognized a phrase
+                recognized_words = memory.getData("WordRecognized")
+                
+                # recognized_words is a list of [word, confidence] pairs
+                if recognized_words and len(recognized_words) >= 2:
+                    word = recognized_words[0]
+                    confidence = recognized_words[1]
+                    
+                    # Filter out low-confidence recognitions
+                    if confidence > 0.4:
+                        print("Recognized: '%s' with confidence %s" % (word, confidence))
+                        
+                        # Breathing exercises - use local responses for immediate guidance
+                        if any(phrase in word for phrase in ["breathing exercise", "help me relax", "need to calm down"]):
+                            response = random.choice(breathing_exercises)
+                            tts.say(response)
+                        
+                        # Stress and negative emotions - use OpenAI for personalized response
+                        elif any(phrase in word for phrase in ["feel stressed", "anxiety", "overwhelmed", "too much pressure", "work stress", "I'm sad", "I feel sad", "I'm feeling sad", "sadness", "I'm angry", "I feel angry", "I'm depressed", "I feel depressed", "I'm anxious", "I'm worried", "I'm frustrated"]):
+                            prompt = "The user said they '{}'. Provide a brief, compassionate response acknowledging their feelings and offering a simple stress reduction technique.".format(word)
+                            try:
+                                ai_response = get_openai_response(prompt)
+                                tts.say(str(ai_response))
+                            except Exception as speak_error:
+                                print("Error in text-to-speech: {}".format(speak_error))
+                                tts.say("I understand you're feeling that way. Take a moment to breathe deeply.")
+                        
+                        # Positive emotions
+                        elif any(phrase in word for phrase in ["I'm happy", "I feel happy", "I'm feeling happy", "happiness", "I'm excited"]):
+                            prompt = "The user said they '{}'. Acknowledge their positive emotion and provide a brief, encouraging response.".format(word)
+                            try:
+                                ai_response = get_openai_response(prompt)
+                                tts.say(str(ai_response))
+                            except Exception as speak_error:
+                                print("Error in text-to-speech: {}".format(speak_error))
+                                tts.say("It's wonderful to hear you're feeling positive. Celebrating these moments helps reinforce them.")
+                        
+                        # Positive affirmations
+                        elif "affirmation" in word:
+                            prompt = "Generate a positive, uplifting affirmation for someone experiencing stress."
+                            try:
+                                ai_response = get_openai_response(prompt)
+                                tts.say(str(ai_response))
+                            except Exception as speak_error:
+                                print("Error in text-to-speech: {}".format(speak_error))
+                                tts.say("You are strong and capable, even in difficult moments.")
+                        
+                        # Meditation and mindfulness - combined approach
+                        elif any(phrase in word for phrase in ["meditation", "mindfulness", "guided relaxation"]):
+                            tts.say("Let me guide you through a brief mindfulness exercise.")
+                            prompt = "Create a brief 30-second mindfulness script that guides the listener through focusing on breath, body sensations, and awareness."
+                            try:
+                                ai_response = get_openai_response(prompt, max_tokens=200)
+                                tts.say(str(ai_response))
+                            except Exception as speak_error:
+                                print("Error in text-to-speech: {}".format(speak_error))
+                                tts.say("Focus on your breath. Notice the sensation of air flowing in and out. When your mind wanders, gently bring your attention back.")
+                        
+                        # Sleep help
+                        elif "help me sleep" in word:
+                            prompt = "Provide brief, practical advice for someone having trouble sleeping due to stress or anxiety."
+                            try:
+                                ai_response = get_openai_response(prompt)
+                                tts.say(str(ai_response))
+                            except Exception as speak_error:
+                                print("Error in text-to-speech: {}".format(speak_error))
+                                tts.say("To prepare for sleep, try progressive muscle relaxation and avoid screens before bedtime.")
+                        
+                        # General responses
+                        elif "how are you" in word:
+                            tts.say("I'm here and ready to help you with your wellness needs. How are you feeling today?")
+                        
+                        # Thank you response
+                        elif "thank you" in word:
+                            prompt = "Generate a brief, warm response to someone saying thank you for wellness advice."
+                            try:
+                                ai_response = get_openai_response(prompt)
+                                tts.say(str(ai_response))
+                            except Exception as speak_error:
+                                print("Error in text-to-speech: {}".format(speak_error))
+                                tts.say("You're welcome. Remember to be kind to yourself.")
+                        
+                        # Goodbye response
+                        elif "goodbye" in word:
+                            prompt = "Create a brief farewell message that encourages continued self-care."
+                            try:
+                                ai_response = get_openai_response(prompt)
+                                tts.say(str(ai_response))
+                            except Exception as speak_error:
+                                print("Error in text-to-speech: {}".format(speak_error))
+                                tts.say("Goodbye. Remember to take moments for yourself throughout your day.")
+                        
+                        # Reset recognition
+                        memory.insertData("WordRecognized", [])
+                
+                # Small pause to not overwhelm the CPU
+                time.sleep(0.1)
+                
+        except KeyboardInterrupt:
+            print("Stopping wellness bot...")
+            tts.say("I hope you're feeling more relaxed. Take care of yourself.")
+            speech_recog.unsubscribe("WellnessBotSpeechRecognition")
+            motion.rest()  # Put the robot in rest position
+    
+    except Exception as e:
+        print("Error occurred: %s" % e)
+        return
+
+if __name__ == "__main__":
+    # Get optional robot IP and port if provided via command line
+    robot_ip = sys.argv[1] if len(sys.argv) > 1 else "172.20.95.120"
+    robot_port = int(sys.argv[2]) if len(sys.argv) > 2 else 9559
+    
+    # Run the main function with the provided arguments
+    main(robot_ip=robot_ip, robot_port=robot_port)
